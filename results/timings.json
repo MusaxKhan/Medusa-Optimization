@@ -1,0 +1,45 @@
+{
+    "project": "Medusa-PDC-Optimization",
+    "description": "\nPDC-based optimization of Medusa candidate verification using:\n- OpenMP-style multiprocessing\n- SIMD vectorization (NumPy)\n- KV-cache cost modeling (FastDecode + NEO inspired)\n",
+    "candidate_sizes": [
+        10,
+        20,
+        40,
+        80,
+        160
+    ],
+    "baseline": [
+        0.029845571517944335,
+        0.05941510200500488,
+        0.13569579124450684,
+        0.2927866458892822,
+        0.640752649307251
+    ],
+    "optimized": [
+        0.0001647472381591797,
+        0.00010242462158203126,
+        0.00012431144714355468,
+        0.00023322105407714845,
+        0.00032100677490234377
+    ],
+    "speedups": [
+        181.15976845151954,
+        580.0861266294227,
+        1091.5792098197162,
+        1255.4040073604579,
+        1996.0720439691027
+    ],
+    "std_dev_optimized": [
+        0.00016548392956755034,
+        1.182863749215214e-05,
+        2.6282596302821103e-05,
+        4.676394303298728e-05,
+        0.00011972892041781106
+    ],
+    "pdc_mapping": {
+        "parallelism": "OpenMP-style multiprocessing over candidate scoring",
+        "simd": "NumPy vectorized batch scoring",
+        "scheduling": "NEO-inspired batch execution of candidates",
+        "memory": "KV-cache cost modeling inspired by FastDecode and NEO"
+    }
+}
