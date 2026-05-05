@@ -3,3 +3,5 @@ numpy
 tqdm
 psutil
 matplotlib
+transformers
+huggingface_hub

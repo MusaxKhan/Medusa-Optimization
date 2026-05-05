@@ -17,6 +17,9 @@ import os
 from huggingface_hub import hf_hub_download
 import warnings
 
+# new imports
+from core.medusa_optimized.scoring_cpu import optimized_scoring
+
 class MedusaConfig(PretrainedConfig):
     """
     Configuration class for Medusa model.

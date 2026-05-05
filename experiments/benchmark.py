@@ -3,7 +3,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from core.optimized.scoring_cpu import optimized_scoring
+from core.medusa_optimized.scoring_cpu import optimized_scoring
 
 
 # -----------------------------
