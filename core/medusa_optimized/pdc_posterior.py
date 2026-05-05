@@ -1,5 +1,6 @@
 import torch
 import multiprocessing as mp
+import torch.nn.functional as F
 
 def get_nucleus_posterior_mask(logits, candidates, temperature, top_p):
     """

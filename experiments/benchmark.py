@@ -1,143 +1,121 @@
 import time
-import json
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-import config
-from core.medusa_optimized.scoring_cpu import optimized_scoring
+from core.medusa_optimized.medusa_model import MedusaModel
 
 
-# -----------------------------
-# BASELINE (Medusa-like sequential scoring)
-# -----------------------------
-def baseline_scoring(candidates):
-    start = time.time()
+# =========================================================
+# GPU SAFE TIMER
+# =========================================================
+def measure_time(func, *args, **kwargs):
+    torch.cuda.synchronize() if torch.cuda.is_available() else None
 
-    scores = []
-    for c in candidates:
-        time.sleep(0.002)  # simulate GPU-coupled verification delay
-        scores.append(len(c) ** 0.5)
+    start = time.perf_counter()
+    output = func(*args, **kwargs)
 
-    return time.time() - start
+    torch.cuda.synchronize() if torch.cuda.is_available() else None
+    end = time.perf_counter()
+
+    return end - start, output
 
 
-# -----------------------------
-# OPTIMIZED SCORING WRAPPER
-# -----------------------------
-def optimized_scoring_run(candidates):
-    _, exec_time = optimized_scoring(
-        candidates,
-        use_simd=config.USE_SIMD_VECTORIZATION
+# =========================================================
+# RUN SINGLE EXPERIMENT
+# =========================================================
+def run_experiment(model, input_ids, use_pdc, label):
+    times = []
+
+    print(f"\nRunning: {label}")
+
+    for _ in range(3):  # small repeats for stability
+
+        def run():
+            return model.medusa_generate(
+                input_ids=input_ids,
+                max_steps=30,          # controlled for fairness
+                temperature=0.0,
+                sampling="typical",
+                fast=True,
+                use_pdc_opt=use_pdc
+            )
+
+        t, _ = measure_time(run)
+        times.append(t)
+
+    return np.mean(times), np.std(times)
+
+
+# =========================================================
+# MAIN BENCHMARK
+# =========================================================
+def main():
+
+    print("\nLoading Medusa Model...")
+
+    model = MedusaModel.from_pretrained(
+        "lmsys/vicuna-7b-v1.3"  # change if needed
     )
-    return exec_time
 
+    model.eval()
 
-# -----------------------------
-# STABLE EXPERIMENT RUNNER
-# -----------------------------
-def run_stable_experiment(candidate_sizes):
+    if torch.cuda.is_available():
+        model = model.cuda()
 
-    baseline_avg = []
-    optimized_avg = []
-    speedups = []
-    std_dev_opt = []
+    tokenizer = model.get_tokenizer()
 
-    for n in candidate_sizes:
+    prompt = "Explain parallel computing in simple terms."
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
 
-        # synthetic Medusa-like candidates
-        candidates = ["token_" * (i % 5 + 1) for i in range(n)]
+    if torch.cuda.is_available():
+        input_ids = input_ids.cuda()
 
-        baseline_times = []
-        optimized_times = []
+    # =====================================================
+    # BASELINE
+    # =====================================================
+    baseline_time, baseline_std = run_experiment(
+        model,
+        input_ids,
+        use_pdc=False,
+        label="Baseline Medusa"
+    )
 
-        for _ in range(config.NUM_RUNS):
+    # =====================================================
+    # OPTIMIZED
+    # =====================================================
+    opt_time, opt_std = run_experiment(
+        model,
+        input_ids,
+        use_pdc=True,
+        label="PDC Optimized Medusa"
+    )
 
-            # baseline run
-            baseline_times.append(baseline_scoring(candidates))
+    # =====================================================
+    # RESULTS
+    # =====================================================
+    speedup = baseline_time / opt_time if opt_time > 0 else 0
 
-            # optimized run
-            optimized_times.append(optimized_scoring_run(candidates))
+    print("\n==============================")
+    print(f"Baseline Time   : {baseline_time:.4f} s ± {baseline_std:.4f}")
+    print(f"Optimized Time  : {opt_time:.4f} s ± {opt_std:.4f}")
+    print(f"Speedup         : {speedup:.2f}x")
+    print("==============================")
 
-        # statistics
-        b_mean = np.mean(baseline_times)
-        o_mean = np.mean(optimized_times)
+    # =====================================================
+    # PLOT
+    # =====================================================
+    labels = ["Baseline", "Optimized"]
+    values = [baseline_time, opt_time]
 
-        baseline_avg.append(b_mean)
-        optimized_avg.append(o_mean)
-        speedups.append(b_mean / o_mean)
-        std_dev_opt.append(np.std(optimized_times))
-
-        print("\n==============================")
-        print(f"Candidates: {n}")
-        print(f"Baseline Time   : {b_mean:.4f} s")
-        print(f"Optimized Time  : {o_mean:.4f} s")
-        print(f"Speedup         : {b_mean / o_mean:.2f}x")
-        print(f"Std Dev (Opt)   : {np.std(optimized_times):.5f}")
-        print("==============================")
-
-    return baseline_avg, optimized_avg, speedups, std_dev_opt
-
-
-# -----------------------------
-# PLOTTING (REPORT READY)
-# -----------------------------
-def plot_results(n_values, baseline, optimized, speedups):
-
-    # Latency comparison
     plt.figure()
-    plt.plot(n_values, baseline, marker='o', label="Baseline (Medusa-like)")
-    plt.plot(n_values, optimized, marker='o', label="Optimized (PDC)")
-    plt.xlabel("Number of Candidates")
+    plt.bar(labels, values)
     plt.ylabel("Latency (seconds)")
-    plt.title("Medusa Inference Latency Comparison")
-    plt.legend()
-    plt.grid()
-    plt.savefig("results/latency_comparison.png")
+    plt.title("Medusa Inference Performance Comparison")
+    plt.savefig("results/benchmark_plot.png")
 
-    # Speedup curve
-    plt.figure()
-    plt.plot(n_values, speedups, marker='o')
-    plt.xlabel("Number of Candidates")
-    plt.ylabel("Speedup (x)")
-    plt.title("PDC Optimization Speedup (OpenMP + SIMD)")
-    plt.grid()
-    plt.savefig("results/speedup_curve.png")
-
-    print("\nPlots saved in results/")
+    print("\nPlot saved to results/benchmark_plot.png")
 
 
-# -----------------------------
-# SAVE RESULTS
-# -----------------------------
-def save_results(n_values, baseline, optimized, speedups, std_dev):
-
-    data = {
-        "project": config.PROJECT_NAME,
-        "description": config.DESCRIPTION,
-        "candidate_sizes": n_values,
-        "baseline": baseline,
-        "optimized": optimized,
-        "speedups": speedups,
-        "std_dev_optimized": std_dev,
-        "pdc_mapping": config.PDC_MAPPING
-    }
-
-    with open("results/timings.json", "w") as f:
-        json.dump(data, f, indent=4)
-
-
-# -----------------------------
-# MAIN ENTRY
-# -----------------------------
 if __name__ == "__main__":
-
-    print(f"Running: {config.PROJECT_NAME}")
-    print(config.DESCRIPTION)
-
-    candidate_sizes = config.CANDIDATE_SIZES
-
-    baseline, optimized, speedups, std_dev = run_stable_experiment(candidate_sizes)
-
-    save_results(candidate_sizes, baseline, optimized, speedups, std_dev)
-
-    plot_results(candidate_sizes, baseline, optimized, speedups)
+    main()
