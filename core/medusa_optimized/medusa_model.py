@@ -19,6 +19,7 @@ import warnings
 
 # new imports
 from core.medusa_optimized.scoring_cpu import optimized_scoring
+from core.medusa_optimized.pdc_posterior import optimized_evaluate_posterior
 
 class MedusaConfig(PretrainedConfig):
     """
@@ -249,7 +250,8 @@ class MedusaModelABC(nn.Module):
         posterior_alpha=0.3,
         top_p=0.8, 
         sampling = 'typical', 
-        fast = True
+        fast = True,
+        use_pdc_opt=False
     ):
         """
         Args:
@@ -340,9 +342,33 @@ class MedusaModelABC(nn.Module):
             )
 
             # Evaluate the posterior of the candidates to select the accepted candidate prefix
-            best_candidate, accept_length = evaluate_posterior(
-                logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
-            )
+            # best_candidate, accept_length = evaluate_posterior(
+            #     logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
+            # )
+            if use_pdc_opt:
+                best_candidate, accept_length = optimized_evaluate_posterior(
+                    logits,
+                    candidates,
+                    temperature,
+                    posterior_threshold,
+                    posterior_alpha,
+                    top_p,
+                    sampling,
+                    fast,
+                    num_workers=4
+                )
+            else:
+                best_candidate, accept_length = evaluate_posterior(
+                    logits,
+                    candidates,
+                    temperature,
+                    posterior_threshold,
+                    posterior_alpha,
+                    top_p,
+                    sampling,
+                    fast
+                )
+
 
             # Update the input_ids and logits
             input_ids, logits, medusa_logits, new_token = update_inference_inputs(
