@@ -1,0 +1,316 @@
+{
+    "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "device": "cpu",
+    "optimization": {
+        "name": "Shared-Softmax Vectorization",
+        "baseline": "logits (C, T, V) \u2014 softmax O(C\u00b7T\u00b7V)",
+        "optimized": "logits (1, T, V) \u2014 softmax O(T\u00b7V), zero-copy broadcast",
+        "pdc_concepts": [
+            "Data Parallelism: all C candidates in one batched tensor op",
+            "SIMD Vectorization: torch.gather over (C,T,V) in single call",
+            "Memory Optimization: C-fold reduction in softmax memory reads",
+            "Zero-Copy Broadcast: expand() creates stride view, no allocation",
+            "Vectorized Reduction: argmax replaces sequential candidate search"
+        ],
+        "literature": {
+            "FastDecode": "Reducing memory bandwidth is the primary lever for LLM throughput",
+            "NEO": "Decoupled scoring stage operating on pre-computed logits"
+        }
+    },
+    "section_1_correctness": {
+        "all_passed": true,
+        "comparisons": [
+            {
+                "prompt_idx": 1,
+                "candidate_count": 4,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 1,
+                "candidate_count": 8,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 1,
+                "candidate_count": 16,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 1,
+                "candidate_count": 32,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 1,
+                "candidate_count": 64,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 2,
+                "candidate_count": 4,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 11,
+                "accept_len_optimized": 11,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 2,
+                "candidate_count": 8,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 11,
+                "accept_len_optimized": 11,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 2,
+                "candidate_count": 16,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 11,
+                "accept_len_optimized": 11,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 2,
+                "candidate_count": 32,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 11,
+                "accept_len_optimized": 11,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 2,
+                "candidate_count": 64,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 11,
+                "accept_len_optimized": 11,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 3,
+                "candidate_count": 4,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 3,
+                "candidate_count": 8,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 3,
+                "candidate_count": 16,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 3,
+                "candidate_count": 32,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            },
+            {
+                "prompt_idx": 3,
+                "candidate_count": 64,
+                "best_cand_baseline": 0,
+                "best_cand_optimized": 0,
+                "accept_len_baseline": 8,
+                "accept_len_optimized": 8,
+                "tokens_match": true,
+                "max_prob_delta": 0.0,
+                "passed": true
+            }
+        ]
+    },
+    "section_2_microbenchmark": [
+        {
+            "candidate_count": 4,
+            "baseline_ms": 4.7373,
+            "baseline_std_ms": 0.9543,
+            "optimized_ms": 1.4972,
+            "optimized_std_ms": 0.5692,
+            "speedup": 3.1641,
+            "accept_len_baseline": 9.0,
+            "accept_len_optimized": 9.0,
+            "outputs_match": "YES"
+        },
+        {
+            "candidate_count": 8,
+            "baseline_ms": 9.1458,
+            "baseline_std_ms": 1.2801,
+            "optimized_ms": 1.194,
+            "optimized_std_ms": 0.1872,
+            "speedup": 7.6597,
+            "accept_len_baseline": 9.0,
+            "accept_len_optimized": 9.0,
+            "outputs_match": "YES"
+        },
+        {
+            "candidate_count": 16,
+            "baseline_ms": 15.856,
+            "baseline_std_ms": 2.4406,
+            "optimized_ms": 1.269,
+            "optimized_std_ms": 0.1468,
+            "speedup": 12.4944,
+            "accept_len_baseline": 9.0,
+            "accept_len_optimized": 9.0,
+            "outputs_match": "YES"
+        },
+        {
+            "candidate_count": 32,
+            "baseline_ms": 31.0831,
+            "baseline_std_ms": 4.4767,
+            "optimized_ms": 1.3826,
+            "optimized_std_ms": 0.1814,
+            "speedup": 22.4822,
+            "accept_len_baseline": 9.0,
+            "accept_len_optimized": 9.0,
+            "outputs_match": "YES"
+        },
+        {
+            "candidate_count": 64,
+            "baseline_ms": 62.4771,
+            "baseline_std_ms": 10.5945,
+            "optimized_ms": 1.4354,
+            "optimized_std_ms": 0.3691,
+            "speedup": 43.5259,
+            "accept_len_baseline": 9.0,
+            "accept_len_optimized": 9.0,
+            "outputs_match": "YES"
+        }
+    ],
+    "section_3_amdahl": [
+        {
+            "candidate_count": 4,
+            "kernel_speedup": 3.1641,
+            "10% of pipeline": 1.0734,
+            "20% of pipeline": 1.1585,
+            "35% of pipeline": 1.3147
+        },
+        {
+            "candidate_count": 8,
+            "kernel_speedup": 7.6597,
+            "10% of pipeline": 1.0952,
+            "20% of pipeline": 1.2105,
+            "35% of pipeline": 1.4374
+        },
+        {
+            "candidate_count": 16,
+            "kernel_speedup": 12.4944,
+            "10% of pipeline": 1.1013,
+            "20% of pipeline": 1.2255,
+            "35% of pipeline": 1.4749
+        },
+        {
+            "candidate_count": 32,
+            "kernel_speedup": 22.4822,
+            "10% of pipeline": 1.1056,
+            "20% of pipeline": 1.2363,
+            "35% of pipeline": 1.5025
+        },
+        {
+            "candidate_count": 64,
+            "kernel_speedup": 43.5259,
+            "10% of pipeline": 1.1083,
+            "20% of pipeline": 1.2429,
+            "35% of pipeline": 1.5197
+        }
+    ],
+    "section_3_complexity": [
+        {
+            "C": 4,
+            "baseline_ops": 1280000,
+            "optimized_ops": 320040,
+            "theory_ratio": 4.0
+        },
+        {
+            "C": 8,
+            "baseline_ops": 2560000,
+            "optimized_ops": 320080,
+            "theory_ratio": 8.0
+        },
+        {
+            "C": 16,
+            "baseline_ops": 5120000,
+            "optimized_ops": 320160,
+            "theory_ratio": 15.99
+        },
+        {
+            "C": 32,
+            "baseline_ops": 10240000,
+            "optimized_ops": 320320,
+            "theory_ratio": 31.97
+        },
+        {
+            "C": 64,
+            "baseline_ops": 20480000,
+            "optimized_ops": 320640,
+            "theory_ratio": 63.87
+        }
+    ]
+}

@@ -1,121 +1,149 @@
-import time
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
+"""
+benchmark.py
+============
+Master entry point for the CS-3006 PDC Medusa Optimization benchmark suite.
 
-from core.medusa_optimized.medusa_model import MedusaModel
+Runs all four sections in order and saves a combined JSON result:
+  Section 1 — compare_outputs   : correctness verification
+  Section 2 — microbenchmark    : isolated timing
+  Section 3 — analysis          : Amdahl projection + complexity
+  Section 4 — plots             : all figures saved to results/
 
+Run:
+    python -m experiments.benchmark
 
-# =========================================================
-# GPU SAFE TIMER
-# =========================================================
-def measure_time(func, *args, **kwargs):
-    torch.cuda.synchronize() if torch.cuda.is_available() else None
+Individual sections can also be run standalone:
+    python -m experiments.compare_outputs
+    python -m experiments.microbenchmark
+    python -m experiments.analysis
+    python -m experiments.plots
+"""
 
-    start = time.perf_counter()
-    output = func(*args, **kwargs)
+import sys
+import os
+import json
 
-    torch.cuda.synchronize() if torch.cuda.is_available() else None
-    end = time.perf_counter()
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-    return end - start, output
+from experiments.config        import MODEL_NAME, DEVICE, RESULTS_DIR
+from experiments.utils_bench   import load_model
 
-
-# =========================================================
-# RUN SINGLE EXPERIMENT
-# =========================================================
-def run_experiment(model, input_ids, use_pdc, label):
-    times = []
-
-    print(f"\nRunning: {label}")
-
-    for _ in range(3):  # small repeats for stability
-
-        def run():
-            return model.medusa_generate(
-                input_ids=input_ids,
-                max_steps=30,          # controlled for fairness
-                temperature=0.0,
-                sampling="typical",
-                fast=True,
-                use_pdc_opt=use_pdc
-            )
-
-        t, _ = measure_time(run)
-        times.append(t)
-
-    return np.mean(times), np.std(times)
+from experiments.compare_outputs import run_comparison
+from experiments.microbenchmark  import run_microbenchmark
+from experiments.analysis        import run_amdahl, run_complexity
+from experiments.plots           import plot_benchmark, plot_amdahl, plot_correctness
 
 
-# =========================================================
-# MAIN BENCHMARK
-# =========================================================
-def main():
+# ─────────────────────────────────────────────────────────────────────────────
+def run_all():
 
-    print("\nLoading Medusa Model...")
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
-    model = MedusaModel.from_pretrained(
-        "lmsys/vicuna-7b-v1.3"  # change if needed
-    )
+    print()
+    print("╔" + "═" * 70 + "╗")
+    print("║   Medusa PDC Optimization — Complete Benchmark Suite" + " " * 18 + "║")
+    print("║   CS-3006 Parallel and Distributed Computing" + " " * 25 + "║")
+    print("╠" + "═" * 70 + "╣")
+    print(f"║   Model  : {MODEL_NAME:<58}║")
+    print(f"║   Device : {DEVICE:<58}║")
+    print("╠" + "═" * 70 + "╣")
+    print("║   Files in experiments/:" + " " * 45 + "║")
+    print("║     config.py          — all shared settings" + " " * 25 + "║")
+    print("║     utils_bench.py     — shared helpers (loader, timer, builder)" + " " * 3 + "║")
+    print("║     compare_outputs.py — Section 1: correctness check" + " " * 17 + "║")
+    print("║     microbenchmark.py  — Section 2: isolated timing" + " " * 19 + "║")
+    print("║     analysis.py        — Section 3: Amdahl + complexity" + " " * 14 + "║")
+    print("║     plots.py           — Section 4: all figures" + " " * 22 + "║")
+    print("║     benchmark.py       — this file: runs all sections" + " " * 17 + "║")
+    print("╚" + "═" * 70 + "╝")
+    print()
 
-    model.eval()
+    # ── Load model once — shared across all sections ──────────────────────────
+    tokenizer, model = load_model()
 
-    if torch.cuda.is_available():
-        model = model.cuda()
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 1: Output Comparison
+    # ══════════════════════════════════════════════════════════════════════════
+    print("[ 1 / 4 ]  Output Comparison\n")
+    comparisons, all_correct = run_comparison(model, tokenizer)
 
-    tokenizer = model.get_tokenizer()
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 2: Microbenchmark
+    # ══════════════════════════════════════════════════════════════════════════
+    print("[ 2 / 4 ]  Microbenchmark\n")
+    summary = run_microbenchmark(model, tokenizer)
 
-    prompt = "Explain parallel computing in simple terms."
-    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 3: Analysis
+    # ══════════════════════════════════════════════════════════════════════════
+    print("[ 3 / 4 ]  Analysis\n")
+    theoretical = run_amdahl(summary)
+    complexity  = run_complexity()
 
-    if torch.cuda.is_available():
-        input_ids = input_ids.cuda()
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 4: Plots
+    # ══════════════════════════════════════════════════════════════════════════
+    print("[ 4 / 4 ]  Generating plots\n")
+    plot_benchmark(summary)
+    plot_amdahl(theoretical)
+    plot_correctness(comparisons)
 
-    # =====================================================
-    # BASELINE
-    # =====================================================
-    baseline_time, baseline_std = run_experiment(
-        model,
-        input_ids,
-        use_pdc=False,
-        label="Baseline Medusa"
-    )
+    # ── Save combined JSON ────────────────────────────────────────────────────
+    combined = {
+        "model" : MODEL_NAME,
+        "device": DEVICE,
+        "optimization": {
+            "name"     : "Shared-Softmax Vectorization",
+            "baseline" : "logits (C, T, V) — softmax O(C·T·V)",
+            "optimized": "logits (1, T, V) — softmax O(T·V), zero-copy broadcast",
+            "pdc_concepts": [
+                "Data Parallelism: all C candidates in one batched tensor op",
+                "SIMD Vectorization: torch.gather over (C,T,V) in single call",
+                "Memory Optimization: C-fold reduction in softmax memory reads",
+                "Zero-Copy Broadcast: expand() creates stride view, no allocation",
+                "Vectorized Reduction: argmax replaces sequential candidate search",
+            ],
+            "literature": {
+                "FastDecode": "Reducing memory bandwidth is the primary lever for LLM throughput",
+                "NEO"       : "Decoupled scoring stage operating on pre-computed logits",
+            },
+        },
+        "section_1_correctness"  : {"all_passed": all_correct, "comparisons": comparisons},
+        "section_2_microbenchmark": summary,
+        "section_3_amdahl"       : theoretical,
+        "section_3_complexity"   : complexity,
+    }
 
-    # =====================================================
-    # OPTIMIZED
-    # =====================================================
-    opt_time, opt_std = run_experiment(
-        model,
-        input_ids,
-        use_pdc=True,
-        label="PDC Optimized Medusa"
-    )
+    out = os.path.join(RESULTS_DIR, "benchmark_results.json")
+    with open(out, "w") as f:
+        json.dump(combined, f, indent=4)
 
-    # =====================================================
-    # RESULTS
-    # =====================================================
-    speedup = baseline_time / opt_time if opt_time > 0 else 0
+    # ── Final summary ─────────────────────────────────────────────────────────
+    print()
+    print("╔" + "═" * 70 + "╗")
+    print("║   BENCHMARK COMPLETE" + " " * 49 + "║")
+    print("╠" + "═" * 70 + "╣")
 
-    print("\n==============================")
-    print(f"Baseline Time   : {baseline_time:.4f} s ± {baseline_std:.4f}")
-    print(f"Optimized Time  : {opt_time:.4f} s ± {opt_std:.4f}")
-    print(f"Speedup         : {speedup:.2f}x")
-    print("==============================")
+    correct_str = "ALL PASSED ✓" if all_correct else "SOME FAILED ✗"
+    print(f"║   Correctness  : {correct_str:<52}║")
 
-    # =====================================================
-    # PLOT
-    # =====================================================
-    labels = ["Baseline", "Optimized"]
-    values = [baseline_time, opt_time]
+    best = max(summary, key=lambda r: r["speedup"])
+    print(f"║   Peak speedup : {best['speedup']:.2f}x  at C={best['candidate_count']:<47}║")
 
-    plt.figure()
-    plt.bar(labels, values)
-    plt.ylabel("Latency (seconds)")
-    plt.title("Medusa Inference Performance Comparison")
-    plt.savefig("results/benchmark_plot.png")
+    worst = min(summary, key=lambda r: r["speedup"])
+    print(f"║   Min speedup  : {worst['speedup']:.2f}x  at C={worst['candidate_count']:<47}║")
 
-    print("\nPlot saved to results/benchmark_plot.png")
+    print("╠" + "═" * 70 + "╣")
+    print(f"║   results/benchmark_results.json" + " " * 37 + "║")
+    print(f"║   results/benchmark_results.png" + " " * 38 + "║")
+    print(f"║   results/amdahl_projection.png" + " " * 38 + "║")
+    print(f"║   results/output_correctness.png" + " " * 37 + "║")
+    print("╚" + "═" * 70 + "╝")
+    print()
+
+    return combined
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    main()
+    run_all()

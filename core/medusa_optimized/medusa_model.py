@@ -20,7 +20,6 @@ import warnings
 # new imports
 from core.medusa_optimized.scoring_cpu import optimized_scoring
 from core.medusa_optimized.pdc_posterior import optimized_evaluate_posterior
-
 class MedusaConfig(PretrainedConfig):
     """
     Configuration class for Medusa model.
@@ -345,18 +344,25 @@ class MedusaModelABC(nn.Module):
             # best_candidate, accept_length = evaluate_posterior(
             #     logits, candidates, temperature, posterior_threshold, posterior_alpha, top_p=top_p, sampling=sampling, fast=fast
             # )
+            # ================================
+            # PDC OPTIMIZED POSTERIOR STAGE
+            # ================================
+
             if use_pdc_opt:
+
                 best_candidate, accept_length = optimized_evaluate_posterior(
-                    logits,
-                    candidates,
-                    temperature,
-                    posterior_threshold,
-                    posterior_alpha,
-                    top_p,
-                    sampling,
-                    fast,
-                    num_workers=4
+                    logits=logits,
+                    candidates=candidates,
+                    temperature=temperature,
+                    posterior_threshold=posterior_threshold,
+                    posterior_alpha=posterior_alpha,
+                    top_p=top_p,
+                    sampling=sampling,
+                    fast=fast,
+                    num_workers=4,   # CPU parallelism (OpenMP-style mimic)
+                    use_simd=True    # NumPy vectorized scoring
                 )
+
             else:
                 best_candidate, accept_length = evaluate_posterior(
                     logits,
@@ -364,11 +370,10 @@ class MedusaModelABC(nn.Module):
                     temperature,
                     posterior_threshold,
                     posterior_alpha,
-                    top_p,
-                    sampling,
-                    fast
+                    top_p=top_p,
+                    sampling=sampling,
+                    fast=fast
                 )
-
 
             # Update the input_ids and logits
             input_ids, logits, medusa_logits, new_token = update_inference_inputs(
